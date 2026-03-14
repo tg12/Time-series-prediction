@@ -1,18 +1,24 @@
-.PHONY: style test docs pre-release help
+.PHONY: format lint style test docs help
 
-# Directories to run style checks on
+# Directories to run quality checks on
 CHECK_DIRS := tfts examples tests
 
-## Format code and run linting tools
-style:  ## Run formatters and linters (black, isort, flake8, pre-commit)
+## Format Python files with Black
+format:  ## Format Python sources
 	black $(CHECK_DIRS)
-	isort $(CHECK_DIRS)
-	flake8 $(CHECK_DIRS)
+
+## Run static analysis checks
+lint:  ## Run Ruff, Black, and pre-commit checks
+	ruff check .
+	black --check $(CHECK_DIRS)
 	pre-commit run --all-files
 
+## Run formatters and linters
+style: format lint  ## Format code and run linting tools
+
 ## Run all unit tests
-test:  ## Run unit tests using unittest
-	python -m unittest discover
+test:  ## Run the test suite with pytest
+	python3 -m pytest -q
 
 ## Build the documentation
 docs:  ## Build HTML documentation using Sphinx

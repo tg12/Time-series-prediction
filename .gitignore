@@ -75,6 +75,8 @@ htmlcov/
 .coverage
 .coverage.*
 .cache
+.ruff_cache/
+.pylint.d/
 nosetests.xml
 coverage.xml
 *.cover
@@ -94,5 +96,7 @@ coverage.xml
 *.log
 /weights/
 !/weights/.gitkeep
+weights.keras
+/artifacts/
 CLAUDE.md
 temp/

@@ -4,17 +4,20 @@
 
 import logging
 import os
+from pathlib import Path
 import random
 from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from tensorflow.keras.utils import Sequence, get_file
+from tensorflow.keras.utils import get_file
 
 from tfts.constants import TFTS_DATASETS_CACHE
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+AIR_PASSENGERS_CSV_PATH = Path(__file__).with_name("air_passengers.csv")
 
 
 TS_DATASETS_URL = {
@@ -129,14 +132,14 @@ def get_sine(
 
     x_array = np.array(x)[:, :, 0:1]
     y_array = np.array(y)[:, :, 0:1]
-    logging.info("Load sine data", x_array.shape, y_array.shape)
+    logger.info("Loaded sine data with x shape %s and y shape %s", x_array.shape, y_array.shape)
 
     if test_size > 0:
-        slice = int(n_examples * (1 - test_size))
-        x_train = x_array[:slice]
-        y_train = y_array[:slice]
-        x_valid = x_array[slice:]
-        y_valid = y_array[slice:]
+        split_index = int(n_examples * (1 - test_size))
+        x_train = x_array[:split_index]
+        y_train = y_array[:split_index]
+        x_valid = x_array[split_index:]
+        y_valid = y_array[split_index:]
         return (x_train, y_train), (x_valid, y_valid)
     return x_array, y_array
 
@@ -154,7 +157,7 @@ def get_air_passengers(train_sequence_length: int = 24, predict_sequence_length:
         Tuple of training and validation data, each containing inputs and outputs.
 
     """
-    df = pd.read_csv(TS_DATASETS_URL["air_passengers"]["url"], parse_dates=None, date_parser=None, nrows=144)
+    df = pd.read_csv(AIR_PASSENGERS_CSV_PATH, nrows=144)
     v = df.iloc[:, 1:2].values
     v = (v - np.max(v)) / (np.max(v) - np.min(v))  # MinMaxScaler
 
@@ -171,14 +174,14 @@ def get_air_passengers(train_sequence_length: int = 24, predict_sequence_length:
         y.append(y_roll)
     y_array = np.stack(y, axis=1)
     y_array = y_array[train_sequence_length:-predict_sequence_length]
-    logging.info("Load air passenger data", x_array.shape, y_array.shape)
+    logger.info("Loaded air passenger data with x shape %s and y shape %s", x_array.shape, y_array.shape)
 
     if test_size > 0:
-        slice = int(len(x_array) * (1 - test_size))
-        x_train = x_array[:slice]
-        y_train = y_array[:slice]
-        x_valid = x_array[slice:]
-        y_valid = y_array[slice:]
+        split_index = int(len(x_array) * (1 - test_size))
+        x_train = x_array[:split_index]
+        y_train = y_array[:split_index]
+        x_valid = x_array[split_index:]
+        y_valid = y_array[split_index:]
         return (x_train, y_train), (x_valid, y_valid)
     return x_array, y_array
 
@@ -191,20 +194,20 @@ def get_stock_data(ticker: str = "NVDA", start_date="2023-09-01", end_date="2024
     import yfinance as yf
 
     try:
-        logger.info(f"Retrieving data for {ticker} from {start_date} to {end_date}")
+        logger.info("Retrieving data for %s from %s to %s", ticker, start_date, end_date)
 
         data = yf.download(ticker, start=start_date, end=end_date, progress=False)
 
         if data.empty:
-            logger.warning(f"No data returned for ticker {ticker}")
+            logger.warning("No data returned for ticker %s", ticker)
             raise ValueError(f"No data available for ticker: {ticker}")
 
-        logger.info(f"Successfully retrieved {len(data)} records for {ticker}")
+        logger.info("Successfully retrieved %s records for %s", len(data), ticker)
         return data
 
     except Exception as e:
         logger.exception("Stock data retrieval failed.")
-        raise RuntimeError(f"Failed to fetch stock data: {e}")
+        raise RuntimeError(f"Failed to fetch stock data: {e}") from e
 
 
 def get_ar_data(

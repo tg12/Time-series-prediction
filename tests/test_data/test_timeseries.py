@@ -526,13 +526,15 @@ class TimeSeriesSequenceTest(unittest.TestCase):
     def test_tf_dataset_empty_sequences(self):
         """Test TensorFlow dataset with empty sequences."""
         short_data = self.data.head(5)
-        seq = TimeSeriesSequence(
-            data=short_data,
-            time_idx="date",
-            target_column="value",
-            train_sequence_length=10,
-            predict_sequence_length=5,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=UserWarning)
+            seq = TimeSeriesSequence(
+                data=short_data,
+                time_idx="date",
+                target_column="value",
+                train_sequence_length=10,
+                predict_sequence_length=5,
+            )
         dataset = seq.get_tf_dataset()
         # Should handle empty sequences gracefully
         self.assertIsInstance(dataset, tf.data.Dataset)
@@ -963,13 +965,15 @@ class TimeSeriesSequenceTest(unittest.TestCase):
     def test_empty_sequences_case(self):
         """Test handling when no valid sequences can be generated."""
         short_data = self.data.head(5)
-        seq = TimeSeriesSequence(
-            data=short_data,
-            time_idx="date",
-            target_column="value",
-            train_sequence_length=10,
-            predict_sequence_length=5,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=UserWarning)
+            seq = TimeSeriesSequence(
+                data=short_data,
+                time_idx="date",
+                target_column="value",
+                train_sequence_length=10,
+                predict_sequence_length=5,
+            )
         self.assertEqual(len(seq.sequences), 0)
 
     def test_edge_case_exact_length_data(self):

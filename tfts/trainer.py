@@ -72,14 +72,14 @@ class BaseTrainer(object):
     def create_accelerator_and_postprocess(self):
         return
 
+    @staticmethod
     def get_distribution_strategy():
         gpus = tf.config.list_physical_devices("GPU")
         if len(gpus) > 1:
             return tf.distribute.MirroredStrategy()
-        elif len(gpus) == 1:
+        if len(gpus) == 1:
             return tf.distribute.OneDeviceStrategy(device="/gpu:0")
-        else:
-            return tf.distribute.OneDeviceStrategy(device="/cpu:0")
+        return tf.distribute.OneDeviceStrategy(device="/cpu:0")
 
     def get_strategy_scope(self):
         return self.strategy.scope() if self.strategy else nullcontext()
@@ -281,6 +281,7 @@ class KerasTrainer(BaseTrainer):
                     batch_size=batch_size,
                     verbose=verbose,
                     callbacks=callbacks,
+                    **kwargs,
                 )
             else:
                 history = self.model.fit(
@@ -291,6 +292,7 @@ class KerasTrainer(BaseTrainer):
                     batch_size=batch_size,
                     verbose=verbose,
                     callbacks=callbacks,
+                    **kwargs,
                 )
         return history
 

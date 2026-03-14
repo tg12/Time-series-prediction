@@ -240,9 +240,11 @@ def add_transform_feature(
     for col in columns:
         for func in functions:
             if func == "log1p":
-                result[f"{col}_log1p"] = np.log1p(result[col])
+                valid = result[col] > -1
+                result[f"{col}_log1p"] = np.where(valid, np.log1p(result[col].where(valid, 0.0)), np.nan)
             elif func == "sqrt":
-                result[f"{col}_sqrt"] = np.sqrt(result[col])
+                valid = result[col] >= 0
+                result[f"{col}_sqrt"] = np.where(valid, np.sqrt(result[col].where(valid, 0.0)), np.nan)
             elif func == "square":
                 result[f"{col}_square"] = np.square(result[col])
             elif func == "exp":

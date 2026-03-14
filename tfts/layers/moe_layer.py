@@ -1,9 +1,9 @@
 """Layer for :py:class:`~tfts.models.transformer`"""
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 import tensorflow as tf
-from tensorflow.keras import activations, constraints, initializers, regularizers
+from tensorflow.keras import activations, initializers
 from tensorflow.keras.layers import Dense
 
 from tfts.layers.dense_layer import MoeMLP
@@ -86,7 +86,6 @@ class SparseMoe(tf.keras.layers.Layer):
         )
         super().build(input_shape)
 
-    @tf.function  # This is important for AutoGraph to convert correctly
     def call(self, hidden_states: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
         """Forward pass of the MoE layer.
 
@@ -117,59 +116,35 @@ class SparseMoe(tf.keras.layers.Layer):
 
         final_hidden_states = tf.zeros_like(hidden_states_flat, dtype=hidden_states.dtype)
 
-        # --- FIX APPLIED HERE ---
-        # Use a pure Python for loop to iterate over self.experts
-        # This ensures expert_idx is a concrete Python integer for list indexing.
         for i in range(self.num_experts):
-            expert_idx_tensor = tf.constant(i, dtype=tf.int32)  # Create a tensor for comparison in graph ops
-
-            # Create a boolean mask for tokens that selected the current expert
-            expert_chosen_mask = tf.equal(selected_experts, expert_idx_tensor)  # (num_tokens, top_k)
+            expert_idx_tensor = tf.constant(i, dtype=tf.int32)
+            expert_chosen_mask = tf.equal(selected_experts, expert_idx_tensor)
 
             coordinates = tf.where(expert_chosen_mask)
 
-            # Check if there are any true values for this expert
-            # Use tf.cond for graph-compatible conditional execution
             def process_expert_branch():
                 token_indices_for_expert = coordinates[:, 0]
                 topk_position_for_expert = coordinates[:, 1]
-
-                # Gather the hidden states for the tokens that chose this expert
                 current_state = tf.gather(hidden_states_flat, token_indices_for_expert)
-
-                # Here, self.experts[i] uses the Python integer 'i'
                 current_hidden_states_expert_output = self.experts[i](current_state)
-
-                # Gather the corresponding routing weights for these tokens and their chosen expert
                 current_routing_weights = tf.gather_nd(
                     routing_weights, tf.stack([token_indices_for_expert, topk_position_for_expert], axis=-1)
                 )
-                current_routing_weights = tf.expand_dims(
-                    current_routing_weights, axis=-1
-                )  # Shape (num_tokens_for_expert, 1)
+                current_routing_weights = tf.expand_dims(current_routing_weights, axis=-1)
 
                 weighted_expert_output = current_hidden_states_expert_output * tf.cast(
                     current_routing_weights, current_hidden_states_expert_output.dtype
                 )
-
-                # Accumulate results using tf.tensor_scatter_nd_add
-                indices_to_scatter = tf.expand_dims(
-                    token_indices_for_expert, axis=-1
-                )  # Shape (num_tokens_for_expert, 1)
-
-                # This needs to update `final_hidden_states` which is a loop-carried tensor
+                indices_to_scatter = tf.expand_dims(token_indices_for_expert, axis=-1)
                 return tf.tensor_scatter_nd_add(final_hidden_states, indices_to_scatter, weighted_expert_output)
 
-            # If no tokens selected this expert, return the current final_hidden_states unchanged
             def no_op_branch():
                 return final_hidden_states
 
-            # tf.cond takes callables for true_fn and false_fn
             final_hidden_states = tf.cond(
                 tf.shape(coordinates)[0] > 0, true_fn=process_expert_branch, false_fn=no_op_branch
             )
 
-        # Shared Expert Computation
         shared_expert_output = self.shared_expert(hidden_states_flat)
         shared_expert_gate_output = tf.nn.sigmoid(self.shared_expert_gate(hidden_states_flat))
         shared_expert_output = shared_expert_gate_output * shared_expert_output

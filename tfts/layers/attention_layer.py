@@ -34,6 +34,7 @@ class Attention(tf.keras.layers.Layer):
         self.hidden_size = hidden_size
         self.num_attention_heads = num_attention_heads
         self.attention_probs_dropout_prob = attention_probs_dropout_prob
+        self.supports_masking = True
 
     def build(self, input_shape: Tuple[Optional[int], ...]) -> None:
         self.dense_q = Dense(self.hidden_size, use_bias=False)
@@ -87,8 +88,13 @@ class Attention(tf.keras.layers.Layer):
         score = score / tf.cast(tf.shape(q_)[-1], score.dtype) ** 0.5
 
         if mask is not None:
-            mask = tf.repeat(mask, repeats=self.num_attention_heads, axis=0)
-            score = score * tf.cast(mask, score.dtype)
+            if isinstance(mask, (list, tuple)):
+                mask = next((item for item in mask if item is not None), None)
+            if mask is not None:
+                if mask.shape.rank == 2:
+                    mask = tf.expand_dims(mask, axis=1)
+                mask = tf.repeat(mask, repeats=self.num_attention_heads, axis=0)
+                score = tf.where(tf.cast(mask, tf.bool), score, tf.cast(-1e9, score.dtype))
 
         score = tf.nn.softmax(score, axis=-1)
         score = self.dropout(score, training=training)
@@ -109,6 +115,11 @@ class Attention(tf.keras.layers.Layer):
         }
         base_config = super(Attention, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
+
+    def compute_mask(self, inputs, mask=None):
+        if isinstance(mask, (list, tuple)):
+            return next((item for item in mask if item is not None), None)
+        return mask
 
     def compute_output_shape(self, input_shape):
         if isinstance(input_shape, tuple) and len(input_shape) == 3:

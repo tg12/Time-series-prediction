@@ -127,6 +127,8 @@ class InputsTest(unittest.TestCase):
                 valid_dataset=valid_loader,
                 optimizer=tf.keras.optimizers.Adam(0.003),
                 epochs=1,
+                steps_per_epoch=len(train_reader),
+                validation_steps=len(valid_reader),
             )
 
 

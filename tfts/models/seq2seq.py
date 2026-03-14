@@ -265,6 +265,7 @@ class DecoderV1(tf.keras.layers.Layer):
         decoder_outputs = []
         prev_output = decoder_init_input
         prev_state = init_state
+        teachers = None
         if teacher is not None:
             teacher = tf.squeeze(teacher, 2)
             teachers = tf.split(teacher, self.predict_sequence_length, axis=1)

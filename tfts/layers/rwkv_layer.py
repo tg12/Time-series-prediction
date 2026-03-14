@@ -22,6 +22,11 @@ class TimeMixing(tf.keras.layers.Layer):
         self.value = Dense(self.n_embd, use_bias=False)
         self.receptance = Dense(self.n_embd, use_bias=False)
         self.output_layer = Dense(self.n_embd, use_bias=False)
+        self.key.build(input_shape)
+        self.value.build(input_shape)
+        self.receptance.build(input_shape)
+        self.output_layer.build(input_shape)
+        super().build(input_shape)
 
     def call(self, x, state):
         """time mixing
@@ -36,11 +41,7 @@ class TimeMixing(tf.keras.layers.Layer):
 
         # Shifted x for mixing
         last_x_expanded = tf.expand_dims(last_x, 1)
-        # x shape: (Batch, Seq, Hidden)
-        if tf.shape(x)[1] > 1:
-            xx = tf.concat([last_x_expanded, x[:, :-1, :]], axis=1)
-        else:
-            xx = last_x_expanded
+        xx = tf.concat([last_x_expanded, x], axis=1)[:, : tf.shape(x)[1], :]
 
         xk = x * self.time_mix_k + xx * (1 - self.time_mix_k)
         xv = x * self.time_mix_v + xx * (1 - self.time_mix_v)
@@ -54,23 +55,22 @@ class TimeMixing(tf.keras.layers.Layer):
         # For simplicity/correctness in RNN form, we process along the time dimension
         seq_len = tf.shape(x)[1]
 
-        outputs = tf.TensorArray(tf.float32, size=seq_len)
+        outputs = tf.TensorArray(dtype=v.dtype, size=seq_len)
 
-        curr_aa, curr_bb, curr_pp = aa, bb, pp
+        def condition(t, *_):
+            return t < seq_len
 
-        for t in range(seq_len):
+        def body(t, tensor_array, curr_aa, curr_bb, curr_pp):
             kt = k[:, t, :]
             vt = v[:, t, :]
 
-            # WKV calculation
             ww = self.time_first + kt
             qq = tf.maximum(curr_pp, ww)
             e1 = tf.exp(curr_pp - qq)
             e2 = tf.exp(ww - qq)
             wkv = (e1 * curr_aa + e2 * vt) / (e1 * curr_bb + e2)
-            outputs = outputs.write(t, wkv)
+            tensor_array = tensor_array.write(t, wkv)
 
-            # Update state
             ww = curr_pp + self.time_decay
             qq = tf.maximum(ww, kt)
             e1 = tf.exp(ww - qq)
@@ -78,6 +78,14 @@ class TimeMixing(tf.keras.layers.Layer):
             curr_aa = e1 * curr_aa + e2 * vt
             curr_bb = e1 * curr_bb + e2
             curr_pp = qq
+            return t + 1, tensor_array, curr_aa, curr_bb, curr_pp
+
+        _, outputs, curr_aa, curr_bb, curr_pp = tf.while_loop(
+            condition,
+            body,
+            loop_vars=(tf.constant(0), outputs, aa, bb, pp),
+            parallel_iterations=1,
+        )
 
         wkv_all = tf.transpose(outputs.stack(), [1, 0, 2])  # [B, T, C]
 
@@ -99,6 +107,10 @@ class ChannelMixing(tf.keras.layers.Layer):
         self.key = Dense(self.n_embd, use_bias=False)
         self.value = Dense(self.n_embd, use_bias=False)
         self.receptance = Dense(self.n_embd, use_bias=False)
+        self.key.build(input_shape)
+        self.value.build(input_shape)
+        self.receptance.build(input_shape)
+        super().build(input_shape)
 
     def call(self, x, state):
         """channel mixing
@@ -115,11 +127,7 @@ class ChannelMixing(tf.keras.layers.Layer):
         last_x = state
 
         last_x_expanded = tf.expand_dims(last_x, 1)
-
-        if tf.shape(x)[1] > 1:
-            xx = tf.concat([last_x_expanded, x[:, :-1, :]], axis=1)
-        else:
-            xx = last_x_expanded
+        xx = tf.concat([last_x_expanded, x], axis=1)[:, : tf.shape(x)[1], :]
 
         xk = x * self.time_mix_k + xx * (1 - self.time_mix_k)
         xr = x * self.time_mix_r + xx * (1 - self.time_mix_r)

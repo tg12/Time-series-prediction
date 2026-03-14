@@ -12,8 +12,6 @@ from tfts import AutoConfig, AutoModel, KerasTrainer, Trainer
 from tfts.layers.attention_layer import Attention, ProbAttention
 from tfts.models.informer import Decoder, DecoderLayer, DistilConv, Encoder, EncoderLayer, Informer
 
-tf.config.run_functions_eagerly(True)
-
 
 class InformerTest(unittest.TestCase):
     def test_model(self):

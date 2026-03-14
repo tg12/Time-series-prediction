@@ -165,19 +165,10 @@ class AutoCorrelation(tf.keras.layers.Layer):
         tmp_values = tf.tile(tf.transpose(q, perm=[0, 1, 3, 2]), [1, 1, 1, 2])
         delays_agg = tf.zeros_like(tf.transpose(q, perm=[0, 1, 3, 2]))
 
-        # Aggregate values based on top-k correlations using tf.map_fn instead of Python loop
-        def process_correlation(i):
-            pattern = tf.gather(tmp_values, init_index + tf.expand_dims(indices[..., i], -1), axis=-1, batch_dims=-1)
-            return pattern * tf.expand_dims(tmp_corr[..., i], axis=-1)
-
-        # Generate a list of indices for our top_k
-        indices_list = tf.range(top_k)
-
-        # Apply the function to each index and sum the results
-        correlation_patterns = tf.map_fn(
-            process_correlation, indices_list, fn_output_signature=tf.transpose(q, perm=[0, 1, 3, 2]).dtype
-        )
-        delays_agg = tf.reduce_sum(correlation_patterns, axis=0)
+        gather_indices = init_index[..., tf.newaxis, :] + indices[..., :, tf.newaxis]
+        gathered_values = tf.gather(tmp_values, gather_indices, axis=-1, batch_dims=3)
+        weighted_values = gathered_values * tmp_corr[..., :, tf.newaxis]
+        delays_agg = tf.reduce_sum(weighted_values, axis=-2)
 
         return delays_agg
 
@@ -234,18 +225,17 @@ class AutoCorrelation(tf.keras.layers.Layer):
         L = tf.shape(q)[2]
         S = tf.shape(v)[2]
 
-        # Handle sequence length differences using tf.cond instead of Python conditionals
-        def pad_kv():
-            zeros = tf.zeros_like(q[:, :, : (L - S), :])
-            padded_v = tf.concat([v, zeros], axis=2)
-            padded_k = tf.concat([k, zeros], axis=2)
-            return padded_v, padded_k
-
-        def trim_kv():
-            return v[:, :, :L, :], k[:, :, :L, :]
-
-        # Use tf.cond for graph-compatible conditional operations
-        v_adjusted, k_adjusted = tf.cond(tf.greater(L, S), true_fn=pad_kv, false_fn=trim_kv)
+        pad_length = tf.maximum(L - S, 0)
+        paddings = tf.stack(
+            [
+                tf.constant([0, 0], dtype=tf.int32),
+                tf.constant([0, 0], dtype=tf.int32),
+                tf.stack([0, pad_length]),
+                tf.constant([0, 0], dtype=tf.int32),
+            ]
+        )
+        v_adjusted = tf.pad(v, paddings)[:, :, :L, :]
+        k_adjusted = tf.pad(k, paddings)[:, :, :L, :]
 
         # Compute time-delayed autocorrelation
         delays_agg = self.time_delay_agg(q, k_adjusted, v_adjusted)

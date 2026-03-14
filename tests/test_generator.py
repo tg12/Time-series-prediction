@@ -17,6 +17,8 @@ class TestableGenerationModel(AutoModel, GenerationMixin):
     of time series predictions while maintaining the same interface as AutoModel.
     """
 
+    __test__ = False
+
     def __init__(self, model, config):
         """Initialize TestableGenerationModel.
 
@@ -95,10 +97,6 @@ class MockTransformerModel(tf.keras.Model):
 
         # Store feature names from config
         self.feature_names = config.get("feature_names", ["feature1", "feature2"])
-
-        # Create encoder that explicitly matches the expected input dimension
-        self.encoder = tf.keras.layers.Dense(64, activation="relu", input_shape=(self.input_dim,))
-        self.decoder = tf.keras.layers.Dense(self.output_dim)
 
     def call(self, inputs, training=None, output_hidden_states=None, return_dict=None):
         """Forward pass.

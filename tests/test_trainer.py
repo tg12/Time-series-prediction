@@ -441,7 +441,7 @@ class KerasTrainerTest(unittest.TestCase):
         model = AutoModel.from_config(config, predict_sequence_length=2)
         trainer = KerasTrainer(model)
 
-        early_stopping = tf.keras.callbacks.EarlyStopping(patience=1)
+        early_stopping = tf.keras.callbacks.EarlyStopping(monitor="loss", patience=1)
 
         trainer.train(train_dataset=(x_train, y_train), callbacks=[early_stopping], epochs=5, batch_size=1)
 
@@ -509,7 +509,9 @@ class KerasTrainerTest(unittest.TestCase):
 
     def test_trainer_with_keras_model(self):
         """Test training with a pre-built Keras model."""
-        keras_model = tf.keras.Sequential([tf.keras.layers.LSTM(32, input_shape=(10, 1)), tf.keras.layers.Dense(2)])
+        keras_model = tf.keras.Sequential(
+            [tf.keras.Input(shape=(10, 1)), tf.keras.layers.LSTM(32), tf.keras.layers.Dense(2)]
+        )
 
         x_train = np.random.random((2, 10, 1))
         y_train = np.random.random((2, 2))

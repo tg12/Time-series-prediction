@@ -82,8 +82,10 @@ class TimeSeriesSequence(Sequence):
         mode: str = "train",
         stride: int = 1,
         processor: Optional[List[Callable]] = None,
+        **kwargs,
     ):
         """Initialize the TimeSeriesSequence."""
+        super().__init__(**kwargs)
         self.data = data.copy()
         self.time_idx = time_idx
         self.target = [target_column] if isinstance(target_column, str) else target_column
@@ -107,10 +109,10 @@ class TimeSeriesSequence(Sequence):
         # Generate sequences
         self.sequences = []
         if group_column is not None:
-            for _, group in data.groupby(group_column, observed=True):
+            for _, group in self.data.groupby(group_column, observed=True):
                 self.sequences.extend(self._generate_sequences(group, time_idx=time_idx, target_column=target_column))
         else:
-            self.sequences.extend(self._generate_sequences(data, time_idx=time_idx, target_column=target_column))
+            self.sequences.extend(self._generate_sequences(self.data, time_idx=time_idx, target_column=target_column))
 
         logger.info(
             f"Initialized TimeSeriesSequence with {len(self.sequences)} sequences, "
@@ -175,6 +177,8 @@ class TimeSeriesSequence(Sequence):
         end_idx = min(start_idx + self.batch_size, len(self.sequences))
 
         batch_sequences = self.sequences[start_idx:end_idx]
+        if not batch_sequences:
+            raise IndexError(f"Batch index {idx} is out of range for {len(self.sequences)} sequences")
 
         # Stack encoder inputs and decoder targets using np.stack
         encoder_inputs = np.stack([seq[0] for seq in batch_sequences])
@@ -214,11 +218,7 @@ class TimeSeriesSequence(Sequence):
         """
         group = group.sort_values(by=time_idx)
         target_values = group[target_column].values
-        time_values = group[time_idx].values
-
-        # Convert time values to numeric if they are datetime
-        if pd.api.types.is_datetime64_any_dtype(time_values):
-            time_values = time_values.astype(np.int64) // 10**9  # Convert to seconds
+        time_values = group[time_idx].to_numpy()
 
         sequences = []
         max_start_idx = len(group) - self.train_sequence_length - self.predict_sequence_length + 1
@@ -237,17 +237,7 @@ class TimeSeriesSequence(Sequence):
             # Check if sequences are continuous
             encoder_time_diffs = np.diff(time_values[encoder_indices])
             decoder_time_diffs = np.diff(time_values[decoder_indices])
-
-            # For datetime values, check if differences are consistent
-            if pd.api.types.is_datetime64_any_dtype(group[time_idx]):
-                expected_diff = (group[time_idx].iloc[1] - group[time_idx].iloc[0]).total_seconds()
-                is_continuous = np.all(np.abs(encoder_time_diffs - expected_diff) < 1e-6) and np.all(
-                    np.abs(decoder_time_diffs - expected_diff) < 1e-6
-                )
-            else:
-                is_continuous = np.all(encoder_time_diffs == encoder_time_diffs[0]) and np.all(
-                    decoder_time_diffs == decoder_time_diffs[0]
-                )
+            is_continuous = self._has_constant_step(encoder_time_diffs) and self._has_constant_step(decoder_time_diffs)
 
             if (
                 len(encoder_indices) == self.train_sequence_length
@@ -260,6 +250,13 @@ class TimeSeriesSequence(Sequence):
                 sequences.append((encoder_sequence, decoder_sequence))
 
         return sequences
+
+    @staticmethod
+    def _has_constant_step(time_diffs: np.ndarray) -> bool:
+        """Return True when a sequence of time deltas is empty or constant."""
+        if len(time_diffs) <= 1:
+            return True
+        return np.all(time_diffs == time_diffs[0])
 
     def _validate_inputs(self) -> None:
         """Validate input parameters."""

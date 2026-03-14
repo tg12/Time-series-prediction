@@ -5,19 +5,19 @@ python run_prediction_simple.py --use_model rnn
 import argparse
 import os
 import random
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-from tensorflow.keras.optimizers.schedules import LearningRateSchedule
+from tensorflow.keras.callbacks import EarlyStopping
 
 import tfts
 from tfts import AutoConfig, AutoModel, KerasTrainer
 
 
 def parse_args():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Train a TFTS forecasting model on a demo dataset.")
     parser.add_argument("--seed", type=int, default=315, required=False, help="seed")
     parser.add_argument("--use_model", type=str, default="bert", help="model for train")
     parser.add_argument("--use_data", type=str, default="sine", help="dataset: sine or air passengers")
@@ -26,6 +26,8 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=100, help="Number of training epochs")
     parser.add_argument("--batch_size", type=int, default=16, help="Batch size for training")
     parser.add_argument("--learning_rate", type=float, default=5e-4, help="learning rate for training")
+    parser.add_argument("--plot-path", type=Path, default=None, help="optional path to save the forecast plot")
+    parser.add_argument("--no-show", action="store_true", help="skip the interactive matplotlib window")
 
     return parser.parse_args()
 
@@ -64,4 +66,10 @@ def run_train(args):
 if __name__ == "__main__":
     args = parse_args()
     run_train(args)
-    plt.show()
+    if args.plot_path is not None:
+        args.plot_path.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(args.plot_path, bbox_inches="tight")
+    if args.no_show:
+        plt.close("all")
+    else:
+        plt.show()

@@ -1,16 +1,16 @@
 """Base class for config and model"""
 
-from abc import ABC, abstractmethod
-import collections
+from abc import ABC
+from collections.abc import Mapping
 import json
 import logging
 import os
 from typing import Any, Dict, Optional, Union
 
 import tensorflow as tf
-from tensorflow.keras.layers import Concatenate, Lambda
+from tensorflow.keras.layers import Concatenate
 
-from ..constants import CONFIG_NAME, TF2_WEIGHTS_INDEX_NAME, TF2_WEIGHTS_NAME, TF_WEIGHTS_NAME
+from ..constants import CONFIG_NAME, TF2_WEIGHTS_NAME
 from ..layers.util_layer import CreateDecoderFeature
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,10 @@ class BaseModel(ABC):
         self.config = config
         self.predict_sequence_length = predict_sequence_length
         self.model = None  # Model should be defined later (may not be directly used in all subclasses)
+
+    def __call__(self, *args, **kwargs):
+        """Run the model forward pass."""
+        raise NotImplementedError(f"{self.__class__.__name__} must implement __call__().")
 
     def build_model(self, inputs: tf.keras.layers.Input) -> tf.keras.Model:
         if hasattr(self, "config"):
@@ -240,7 +244,7 @@ def flatten_dict(nested, sep="/"):
         for k, v in nest.items():
             if sep in k:
                 raise ValueError(f"separator '{sep}' not allowed to be in key '{k}'")
-            if isinstance(v, collections.Mapping):
+            if isinstance(v, Mapping):
                 rec(v, prefix + k + sep, into)
             else:
                 into[prefix + k] = v

@@ -41,11 +41,24 @@
 
 **Installation**
 
-- python >= 3.7
-- tensorflow >= 2.4
+- python >= 3.8
+- tensorflow >= 2.4 for Python 3.8-3.13
+- tf-nightly for Python 3.14 until a stable TensorFlow release publishes 3.14 wheels
 
 ```shell
 pip install tfts
+```
+
+```shell
+pip install -r requirements.txt
+```
+
+```shell
+python3.14 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 **Quick start**
@@ -73,6 +86,31 @@ pred = trainer.predict(x_valid)
 trainer.plot(history=x_valid, true=y_valid, pred=pred)
 plt.show()
 ```
+
+**Quality checks**
+
+```shell
+ruff check .
+black --check tfts examples tests
+pytest -q
+pre-commit run --all-files
+```
+
+**Run an example from source**
+
+```shell
+MPLBACKEND=Agg python3 examples/run_prediction_simple.py \
+  --use_model rnn \
+  --use_data sine \
+  --epochs 2 \
+  --batch_size 8 \
+  --plot-path ./artifacts/prediction.png \
+  --no-show
+```
+
+The repository also ships runnable examples in [examples/run_prediction_simple.py](./examples/run_prediction_simple.py),
+[examples/run_classification.py](./examples/run_classification.py), and
+[examples/run_anomaly.py](./examples/run_anomaly.py).
 
 **Prepare your own data**
 
